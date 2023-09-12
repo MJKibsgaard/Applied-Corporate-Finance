@@ -13,3 +13,9 @@ def calculate_daily_returns(tickers, start, end):
         daily_returns[ticker] = adj_close.pct_change()
 
     return daily_returns
+
+
+
+
+
+
