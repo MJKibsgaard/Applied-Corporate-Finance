@@ -11,32 +11,29 @@ c25_companies = [
 start_date = '2023-01-01'
 end_date = '2023-09-01'
 
-# Opret en DataFrame for at gemme alle data
-c25_data = pd.DataFrame()
+# DataFrame to store all data
+c25_all_data = pd.DataFrame()
 
 # Hent data for hver C25-virksomhed
 for ticker in c25_companies:
     data = yf.download(ticker, start=start_date, end=end_date)
     ticker_data = yf.Ticker(ticker)
     
-    # Tilføj 'Volume' til data
+    # Calculate daily returns
+    data['Daily Returns'] = data['Adj Close'].pct_change()
+    
+    # Add volume
     data['Volume'] = data['Volume']
     
-    # Tilføj markedskapitalisering og P/E-forhold som konstante kolonner
+    # Add market capitalization and P/E ratio as constant columns
     data['Market Cap'] = ticker_data.info['marketCap']
     data['P/E Ratio'] = ticker_data.info['trailingPE']
     
-    # Tilføj data til den samlede DataFrame
-    c25_data = pd.concat([c25_data, data], axis=0)
+    # Concatenate data to the main DataFrame
+    c25_all_data = pd.concat([c25_all_data, data], axis=0)
 
-# Vis de første rækker af data for alle virksomheder
-print(c25_data.head())
+# Drop unwanted columns
+c25_all_data = c25_all_data[['Daily Returns', 'Volume', 'Market Cap', 'P/E Ratio']]
 
-# Kald funktionen med C25-virksomhederne
-c25_daily_returns = calculate_daily_returns(c25_companies, start_date, end_date)
-
-# Print nogle data fra funktionen
-print(c25_daily_returns.head())
-
-# Gem daglige afkast i en Excel-fil
-c25_daily_returns.to_excel('daily_returns.xlsx', index=True)
+# Save the consolidated data to Excel
+c25_all_data.to_excel('consolidated_data.xlsx', index=True)
