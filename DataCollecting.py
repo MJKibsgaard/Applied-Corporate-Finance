@@ -39,3 +39,5 @@ c25_all_data = c25_all_data.dropna(axis=1, how='all')
 
 # Gem den konsoliderede data i Excel
 c25_all_data.to_excel('consolidated_data.xlsx', index=True)
+
+
