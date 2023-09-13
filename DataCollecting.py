@@ -5,7 +5,7 @@ from Functions import calculate_daily_returns
 # Liste over danske C25-virksomheder og deres tickers
 c25_companies = [
     'MAERSK-A.CO',
-    'NOVO-B.CO'  # Tilføjet Novo Nordisk
+    'NOVO-B.CO'
 ]
 
 # Start- og slutdato for din dataindsamling
@@ -23,24 +23,19 @@ for ticker in c25_companies:
     # Beregn daglige afkast
     data['Daily Returns'] = data['Adj Close'].pct_change()
     
-    # Tilføj volumen
-    data['Volume'] = data['Volume']
-    
     # Tilføj markedskapitalisering og P/E-forhold som konstante kolonner
     data['Market Cap'] = ticker_data.info['marketCap']
     data['P/E Ratio'] = ticker_data.info['trailingPE']
     
-    # Tilføj aktiens navn som en overtitel
+    # Omdøb kolonner for at have aktiens navn som et præfiks
     stock_name = ticker_data.info['shortName']
-    stock_header = pd.DataFrame({stock_name: ["" for _ in range(len(data))]})
-    combined_data = pd.concat([stock_header, data], axis=1)
+    data.columns = [f"{stock_name} {col}" for col in data.columns]
     
     # Sammenføj data til hoved-DataFrame
-    c25_all_data = pd.concat([c25_all_data, combined_data], axis=0)
+    c25_all_data = pd.concat([c25_all_data, data], axis=1)
 
 # Drop unødvendige kolonner og omarranger kolonner
-columns_order = ['Daily Returns', 'Volume', 'Market Cap', 'P/E Ratio']
-c25_all_data = c25_all_data[columns_order]
+c25_all_data = c25_all_data.dropna(axis=1, how='all')
 
 # Gem den konsoliderede data i Excel
-c25_all_data.to_excel('consolidated_data_with_headers.xlsx', index=True)
+c25_all_data.to_excel('consolidated_data.xlsx', index=True)
