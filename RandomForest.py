@@ -57,3 +57,4 @@ data = data.join(msft_prev[predictors]).iloc[1:]
 
 data.head(5)
 
+# https://www.dataquest.io/blog/portfolio-project-predicting-stock-prices-using-pandas-and-scikit-learn/
