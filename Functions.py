@@ -18,4 +18,3 @@ def calculate_daily_returns(tickers, start, end):
 
 
 
-
