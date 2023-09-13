@@ -4,8 +4,7 @@ from Functions import calculate_daily_returns
 
 # Liste over danske C25-virksomheder og deres tickers
 c25_companies = [
-    'CHR.CO', 'DANSKE.CO', 'DSV.CO', 'FLS.CO', 'GEN.CO', 'LUN.CO', 'MAERSK-A.CO', 'MAERSK-B.CO', 
-    'NOVO-B.CO', 'NZYM-B.CO', 'ORSTED.CO', 'PNDORA.CO', 'TRYG.CO', 'VWS.CO'
+    'MAERSK-A.CO'
 ]
 
 # Start- og slutdato for din dataindsamling
@@ -26,6 +25,7 @@ print(c25_daily_returns.head())
 
 # Gem daglige afkast i en Excel-fil
 c25_daily_returns.to_excel('daily_returns.xlsx', index=True)
+
 
 
 
