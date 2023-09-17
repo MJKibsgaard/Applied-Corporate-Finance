@@ -2,6 +2,7 @@
 import yfinance as yf
 from tqdm import tqdm
 
+
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
     Fetch daily stock data along with PE ratio and market cap for given tickers from Yahoo Finance.
@@ -36,14 +37,14 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 
 
 # Pick the data we want to use
-tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'BRK.B']
+tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
+"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL", "XRAY", "DVN", "DXCM", "FANG", "DLR", "DFS", "DIS", "DG", "DLTR", "D", "DPZ", "DOV", "DOW", "DTE", "DUK", "DD", "DXC", "EMN", "ETN", "EBAY", "ECL", "EIX", "EW", "EA", "ELV", "LLY", "EMR", "ENPH", "ETR", "EOG", "EPAM", "EQT", "EFX",] 
 start_date = '2015-01-01'
 end_date = '2020-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
 
 # Print the data for one of the stocks to check
 print(stock_data['META'].tail())
-
 
 ### Next, we calculate some technical indicators
 
@@ -183,7 +184,10 @@ print(f"Training MSE for all stocks: {mse}")
 
 
 
+
 # Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
+
+
 
 def backtest_model(test_data, model, features):
     """
@@ -210,7 +214,7 @@ def backtest_model(test_data, model, features):
     return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
                       'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
 
-## Backtest the model on the testing data for all stocks
+# Backtest the model on the testing data for all stocks
 backtest_results = {}
 for ticker in test_data.keys():
     if len(test_data[ticker]) == 0:
@@ -221,119 +225,17 @@ for ticker in test_data.keys():
     else:
         print(f"Required features not available for {ticker}. Skipping...")
 
-        
 # Display the results for one of the stocks to check, for example, META
 print(backtest_results['META'])
 
-import matplotlib.pyplot as plt
 
-def plot_average_performance(backtest_results):
-    """
-    Plot the average cumulative returns of the model-based strategy vs. holding across all stocks.
+# Assuming you already have the stock_data dictionary populated
+META_BACKTEST = backtest_results['META']
 
-    Parameters:
-    - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
-    """
-    # Average cumulative returns at each time point
-    avg_cumulative_strategy = sum([data['Cumulative_Strategy_Return'] for _, data in backtest_results.items()]) / len(backtest_results)
-    avg_cumulative_actual = sum([data['Cumulative_Actual_Return'] for _, data in backtest_results.items()]) / len(backtest_results)
-    
-    plt.figure(figsize=(14, 7))
-    plt.plot(avg_cumulative_strategy, label='Average Model-Based Strategy', color='blue')
-    plt.plot(avg_cumulative_actual, label='Average Holding', color='orange')
-    plt.title('Average Cumulative Returns Across All Stocks')
-    plt.xlabel('Date')
-    plt.ylabel('Average Cumulative Return')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+# Save the data for META to an Excel file
+file_path = "META_BACKTEST.xlsx"
+META_BACKTEST.to_excel(file_path)
 
-# Plot average performance across all stocks
-plot_average_performance(backtest_results)
-
-
-# Constructing the portfolio
-AmountOfTopPerformersPicked = 3 #This picks the 5 assets with biggest probability of getting positive return
-
-
-def construct_portfolio(test_data, model, features):
-    """
-    Construct a portfolio by picking the top two stocks with the highest predicted returns.
-
-    Parameters:
-    - test_data (dict): Dictionary with tickers as keys and stock data as values.
-    - model (Regressor): Trained regression model.
-    - features (list): List of feature columns to use in prediction.
-
-    Returns:
-    - portfolio_returns (DataFrame): DataFrame with daily portfolio returns and cumulative returns.
-    """
-    # Predict returns for all stocks and store in a DataFrame
-    all_predictions = pd.DataFrame(index=test_data[list(test_data.keys())[0]].index)
-    for ticker, data in test_data.items():
-        all_predictions[ticker] = model.predict(data[features])
-    
-    # For each day, pick the top stocks with highest predicted returns
-    top_stocks = all_predictions.apply(lambda row: row.nlargest(AmountOfTopPerformersPicked).index, axis=1)
-
-
-    # Calculate the average return of the top stocks for each day
-    portfolio_daily_returns = []
-    for date in top_stocks.index:
-        stocks = top_stocks.loc[date]
-        avg_return = sum([test_data[stock].loc[date, 'Daily_Return'] for stock in stocks]) / AmountOfTopPerformersPicked
-        portfolio_daily_returns.append(avg_return) 
-
-    # Convert to DataFrame and compute cumulative returns
-    portfolio_returns = pd.DataFrame(index=all_predictions.index, data={'Portfolio_Return': portfolio_daily_returns})
-    portfolio_returns['Cumulative_Return'] = (1 + portfolio_returns['Portfolio_Return']).cumprod() - 1
-    
-    return portfolio_returns
-
-# Construct portfolio using the model-based strategy
-portfolio_results = construct_portfolio(test_data, model, features)
-
-# Display the results
-print(portfolio_results.tail())
-
-
-
-def plot_portfolio_comparison(portfolio_results, backtest_results):
-    """
-    Plot the cumulative returns of the model-based portfolio against an equally-weighted portfolio.
-
-    Parameters:
-    - portfolio_results (DataFrame): Results from the model-based portfolio.
-    - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
-    """
-    # Calculate daily and cumulative returns for equally-weighted portfolio
-    equal_weights_returns = pd.concat([data['Daily_Return'] for _, data in backtest_results.items()], axis=1).mean(axis=1)
-    cumulative_equal_weights = (1 + equal_weights_returns).cumprod() - 1
-    
-    # Plot
-    plt.figure(figsize=(14, 7))
-    plt.plot(portfolio_results['Cumulative_Return'], label='Model-Based Portfolio', color='blue')
-    plt.plot(cumulative_equal_weights, label='Equally-Weighted Portfolio', color='orange')
-    plt.title('Cumulative Returns Comparison')
-    plt.xlabel('Date')
-    plt.ylabel('Cumulative Return')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-# Plot the performance comparison
-plot_portfolio_comparison(portfolio_results, test_data)
-
-
-#Lastly, we compute the risk of each portfolio during the period
-# Portfolio Volatility
-portfolio_volatility = portfolio_results['Portfolio_Return'].std()
-
-# S&P 500 Index Volatility (constructed from the stocks you have)
-sp500_returns = pd.concat([data['Daily_Return'] for _, data in test_data.items()], axis=1).mean(axis=1)
-sp500_volatility = sp500_returns.std()
-
-print(f"Portfolio Volatility: {portfolio_volatility:.6f}")
-print(f"S&P 500 Index Volatility (constructed from current stocks): {sp500_volatility:.6f}")
+print(f"Data saved to {file_path}")
 
 

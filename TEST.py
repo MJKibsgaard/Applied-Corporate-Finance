@@ -36,7 +36,8 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 
 
 # Pick the data we want to use
-tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'BRK.B']
+tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
+"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL"]
 start_date = '2015-01-01'
 end_date = '2020-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
@@ -251,9 +252,22 @@ def plot_average_performance(backtest_results):
 # Plot average performance across all stocks
 plot_average_performance(backtest_results)
 
+# We remove the tickers that has 0 rows. These cannot be used for the portfolio construction
+to_remove = []
+
+for ticker, data in test_data.items():
+    if data.shape[0] == 0:
+        print(f"Ticker {ticker} has 0 rows.")
+        to_remove.append(ticker)
+
+for ticker in to_remove:
+    del test_data[ticker]
+
+
+# Now, we try to construct a portfolio where we use the top stocks
 
 # Constructing the portfolio
-AmountOfTopPerformersPicked = 3 #This picks the 5 assets with biggest probability of getting positive return
+AmountOfTopPerformersPicked = 5 #This picks the 5 assets with biggest probability of getting positive return
 
 
 def construct_portfolio(test_data, model, features):
@@ -295,45 +309,4 @@ portfolio_results = construct_portfolio(test_data, model, features)
 
 # Display the results
 print(portfolio_results.tail())
-
-
-
-def plot_portfolio_comparison(portfolio_results, backtest_results):
-    """
-    Plot the cumulative returns of the model-based portfolio against an equally-weighted portfolio.
-
-    Parameters:
-    - portfolio_results (DataFrame): Results from the model-based portfolio.
-    - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
-    """
-    # Calculate daily and cumulative returns for equally-weighted portfolio
-    equal_weights_returns = pd.concat([data['Daily_Return'] for _, data in backtest_results.items()], axis=1).mean(axis=1)
-    cumulative_equal_weights = (1 + equal_weights_returns).cumprod() - 1
-    
-    # Plot
-    plt.figure(figsize=(14, 7))
-    plt.plot(portfolio_results['Cumulative_Return'], label='Model-Based Portfolio', color='blue')
-    plt.plot(cumulative_equal_weights, label='Equally-Weighted Portfolio', color='orange')
-    plt.title('Cumulative Returns Comparison')
-    plt.xlabel('Date')
-    plt.ylabel('Cumulative Return')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-# Plot the performance comparison
-plot_portfolio_comparison(portfolio_results, test_data)
-
-
-#Lastly, we compute the risk of each portfolio during the period
-# Portfolio Volatility
-portfolio_volatility = portfolio_results['Portfolio_Return'].std()
-
-# S&P 500 Index Volatility (constructed from the stocks you have)
-sp500_returns = pd.concat([data['Daily_Return'] for _, data in test_data.items()], axis=1).mean(axis=1)
-sp500_volatility = sp500_returns.std()
-
-print(f"Portfolio Volatility: {portfolio_volatility:.6f}")
-print(f"S&P 500 Index Volatility (constructed from current stocks): {sp500_volatility:.6f}")
-
 
