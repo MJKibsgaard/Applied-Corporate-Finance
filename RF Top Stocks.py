@@ -183,6 +183,23 @@ mse = mean_squared_error(y_train, train_predictions)
 print(f"Training MSE for all stocks: {mse}")
 
 
+def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
+    """
+    Calculate the Sharpe ratio.
+
+    Parameters:
+    - returns (Series): Daily returns.
+    - risk_free_rate (float, optional): Daily risk-free rate. Default is 0.0003.
+
+    Returns:
+    - sharpe_ratio (float): Sharpe ratio of the given returns.
+    """
+    avg_daily_return = returns.mean()
+    std_dev_return = returns.std()
+    sharpe_ratio = (avg_daily_return - risk_free_rate) / std_dev_return
+    return sharpe_ratio
+
+
 
 # Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
 
@@ -215,7 +232,7 @@ def backtest_top_stocks_modified(test_data_dict, model, features):
         all_predicted_returns[ticker] = data['Predicted_Return']
 
     # Determine top 10 stocks for each day
-    top_10_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= 25
+    top_10_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= 10
 
     # Calculate daily strategy return based on top 10 stocks
     daily_strategy_return = (all_daily_returns * top_10_stocks).sum(axis=1) / top_10_stocks.sum(axis=1)
@@ -231,10 +248,12 @@ def backtest_top_stocks_modified(test_data_dict, model, features):
         'Cumulative_Actual_Return': cumulative_actual_return
     })
     
+    # Compute Sharpe ratios
+    results['Strategy_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Strategy_Return'])
+    results['Actual_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Daily_Return'])
+
     return results
 
-# The provided code for backtesting won't run here since we don't have 'test_data', 'model', or 'features' defined in this session.
-# However, you can integrate the modified function into your code and execute it in your local environment.
 
 results = backtest_top_stocks_modified(test_data, model, features)
 results.head()
@@ -264,8 +283,9 @@ def plot_strategy_vs_holding(results_df):
     plt.tight_layout()
     
     plt.show()
-
+    
+    # Print Sharpe Ratios
+    print(f"Strategy Sharpe Ratio: {results['Strategy_Sharpe_Ratio'].iloc[0]:.4f}")
+    print(f"Actual Sharpe Ratio: {results['Actual_Sharpe_Ratio'].iloc[0]:.4f}")
 
 plot_strategy_vs_holding(results)
-
-

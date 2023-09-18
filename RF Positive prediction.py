@@ -1,6 +1,7 @@
 ### Extracting data from yahoo finance. It should be easily scalable. We can just add tickers to expand the model
 import yfinance as yf
 from tqdm import tqdm
+import numpy as np
 
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
@@ -154,8 +155,6 @@ for ticker, df in stock_data.items():
 print(f"META - Training data shape: {train_data['META'].shape}")
 print(f"META - Testing data shape: {test_data['META'].shape}")
 
-
-
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
@@ -182,6 +181,22 @@ mse = mean_squared_error(y_train, train_predictions)
 print(f"Training MSE for all stocks: {mse}")
 
 
+def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
+    """
+    Calculate the Sharpe ratio.
+
+    Parameters:
+    - returns (Series): Daily returns.
+    - risk_free_rate (float, optional): Daily risk-free rate. Default is 0.0003.
+
+    Returns:
+    - sharpe_ratio (float): Sharpe ratio of the given returns.
+    """
+    avg_daily_return = returns.mean()
+    std_dev_return = returns.std()
+    sharpe_ratio = (avg_daily_return - risk_free_rate) / std_dev_return
+    return sharpe_ratio
+
 
 # Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
 
@@ -207,9 +222,18 @@ def backtest_model(test_data, model, features):
     # Compute cumulative returns
     test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
     test_data['Cumulative_Actual_Return'] = (1 + test_data['Daily_Return']).cumprod() - 1
+
+    # sharp ratios
+    strategy_sharpe_ratio = calculate_sharpe_ratio(test_data['Strategy_Return'])
+    actual_sharpe_ratio = calculate_sharpe_ratio(test_data['Daily_Return'])
     
+    test_data['Strategy_Sharpe_Ratio'] = strategy_sharpe_ratio
+    test_data['Actual_Sharpe_Ratio'] = actual_sharpe_ratio
+    
+
     return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
-                      'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
+                      'Cumulative_Strategy_Return', 'Cumulative_Actual_Return',
+                      'Strategy_Sharpe_Ratio', 'Actual_Sharpe_Ratio']]
 
 
 ## Backtest the model on the testing data for all stocks
@@ -263,8 +287,22 @@ def plot_average_performance(backtest_results):
     plt.grid(True)
     plt.show()
 
+
+     # Extract Sharpe ratios for each stock
+    strategy_sharpe_ratios = [df['Strategy_Sharpe_Ratio'].iloc[0] for _, df in backtest_results.items()]
+    actual_sharpe_ratios = [df['Actual_Sharpe_Ratio'].iloc[0] for _, df in backtest_results.items()]
+
+    # Calculate average Sharpe ratios
+    average_strategy_sharpe_ratio = np.mean(strategy_sharpe_ratios)
+    average_actual_sharpe_ratio = np.mean(actual_sharpe_ratios)
+
+    print(f"Average Model-Based Strategy Sharpe Ratio: {average_strategy_sharpe_ratio:.4f}")
+    print(f"Average Holding Sharpe Ratio: {average_actual_sharpe_ratio:.4f}")
+
+
 # Plot average performance across all stocks
 plot_average_performance(backtest_results)
+
 
 
 
