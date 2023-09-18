@@ -1,6 +1,5 @@
 import yfinance as yf
 import pandas as pd
-from tqdm import tqdm
 import numpy as np
 from Functions import fetch_data_with_fundamentals, compute_technical_indicators, compute_lagged_returns, split_data, calculate_sharpe_ratio
 
