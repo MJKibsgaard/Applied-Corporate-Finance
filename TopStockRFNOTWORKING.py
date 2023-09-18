@@ -1,6 +1,7 @@
 ### Extracting data from yahoo finance. It should be easily scalable. We can just add tickers to expand the model
 import yfinance as yf
 from tqdm import tqdm
+import numpy as np
 
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
@@ -184,8 +185,6 @@ print(f"Training MSE for all stocks: {mse}")
 
 
 
-# Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
-
 def backtest_model(test_data, model, features):
     """
     Backtest the trained model on the testing data.
@@ -201,15 +200,23 @@ def backtest_model(test_data, model, features):
     # Predict returns
     test_data['Predicted_Return'] = model.predict(test_data[features])
     
-    # Construct portfolio: invest in stock on days with positive predicted return
-    test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0)
+    # Initialize the Top10_Strategy_Return column with NaNs
+    test_data['Top10_Strategy_Return'] = np.nan
     
+    # For each day, pick the top 10 stocks and set the average return of these stocks as the strategy return for that day
+    for date, group in test_data.groupby('Date'):
+        top_10 = group.sort_values(by='Predicted_Return', ascending=False).head(10)
+        avg_return = top_10['Daily_Return'].mean()
+        test_data.loc[test_data['Date'] == date, 'Top10_Strategy_Return'] = avg_return
+
     # Compute cumulative returns
-    test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
+    test_data['Cumulative_Top10_Strategy_Return'] = (1 + test_data['Top10_Strategy_Return']).cumprod() - 1
     test_data['Cumulative_Actual_Return'] = (1 + test_data['Daily_Return']).cumprod() - 1
     
-    return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
-                      'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
+    return test_data[['Date', 'Daily_Return', 'Predicted_Return', 'Top10_Strategy_Return', 
+                      'Cumulative_Top10_Strategy_Return', 'Cumulative_Actual_Return']]
+
+
 
 ## Backtest the model on the testing data for all stocks
 backtest_results = {}
@@ -222,9 +229,9 @@ for ticker in test_data.keys():
     else:
         print(f"Required features not available for {ticker}. Skipping...")
 
-        
-# Display the results for one of the stocks to check, for example, META
-print(backtest_results['META'])
+
+
+
 
 import matplotlib.pyplot as plt
 
@@ -235,13 +242,25 @@ def plot_average_performance(backtest_results):
     Parameters:
     - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
     """
-    # Average cumulative returns at each time point
-    avg_cumulative_strategy = sum([data['Cumulative_Strategy_Return'] for _, data in backtest_results.items()]) / len(backtest_results)
-    avg_cumulative_actual = sum([data['Cumulative_Actual_Return'] for _, data in backtest_results.items()]) / len(backtest_results)
-    
+    # Initialize a list to store the 'Cumulative_Strategy_Return' columns for all stocks
+    cumulative_returns = []
+    cumulative_returns_actual = []
+
+    # Extract the 'Cumulative_Strategy_Return' column for each stock and append to the list
+    for _, df in backtest_results.items():
+        cumulative_returns.append(df['Cumulative_Strategy_Return'])
+
+    for _, df in backtest_results.items():
+        cumulative_returns_actual.append(df['Cumulative_Actual_Return'])
+
+    # Assuming you're using pandas, you can use the concat function to concatenate these columns and then compute the mean along the horizontal axis (axis=1) to get the daily average
+    average_strategy_returns = pd.concat(cumulative_returns, axis=1).mean(axis=1)
+    average_actual_returns = pd.concat(cumulative_returns_actual, axis=1).mean(axis=1)
+
+
     plt.figure(figsize=(14, 7))
-    plt.plot(avg_cumulative_strategy, label='Average Model-Based Strategy', color='blue')
-    plt.plot(avg_cumulative_actual, label='Average Holding', color='orange')
+    plt.plot(average_strategy_returns, label='Average Model-Based Strategy', color='blue')
+    plt.plot(average_actual_returns, label='Average Holding', color='orange')
     plt.title('Average Cumulative Returns Across All Stocks')
     plt.xlabel('Date')
     plt.ylabel('Average Cumulative Return')
@@ -252,61 +271,4 @@ def plot_average_performance(backtest_results):
 # Plot average performance across all stocks
 plot_average_performance(backtest_results)
 
-# We remove the tickers that has 0 rows. These cannot be used for the portfolio construction
-to_remove = []
-
-for ticker, data in test_data.items():
-    if data.shape[0] == 0:
-        print(f"Ticker {ticker} has 0 rows.")
-        to_remove.append(ticker)
-
-for ticker in to_remove:
-    del test_data[ticker]
-
-
-# Now, we try to construct a portfolio where we use the top stocks
-
-# Constructing the portfolio
-AmountOfTopPerformersPicked = 5 #This picks the 5 assets with biggest probability of getting positive return
-
-
-def construct_portfolio(test_data, model, features):
-    """
-    Construct a portfolio by picking the top two stocks with the highest predicted returns.
-
-    Parameters:
-    - test_data (dict): Dictionary with tickers as keys and stock data as values.
-    - model (Regressor): Trained regression model.
-    - features (list): List of feature columns to use in prediction.
-
-    Returns:
-    - portfolio_returns (DataFrame): DataFrame with daily portfolio returns and cumulative returns.
-    """
-    # Predict returns for all stocks and store in a DataFrame
-    all_predictions = pd.DataFrame(index=test_data[list(test_data.keys())[0]].index)
-    for ticker, data in test_data.items():
-        all_predictions[ticker] = model.predict(data[features])
-    
-    # For each day, pick the top stocks with highest predicted returns
-    top_stocks = all_predictions.apply(lambda row: row.nlargest(AmountOfTopPerformersPicked).index, axis=1)
-
-
-    # Calculate the average return of the top stocks for each day
-    portfolio_daily_returns = []
-    for date in top_stocks.index:
-        stocks = top_stocks.loc[date]
-        avg_return = sum([test_data[stock].loc[date, 'Daily_Return'] for stock in stocks]) / AmountOfTopPerformersPicked
-        portfolio_daily_returns.append(avg_return) 
-
-    # Convert to DataFrame and compute cumulative returns
-    portfolio_returns = pd.DataFrame(index=all_predictions.index, data={'Portfolio_Return': portfolio_daily_returns})
-    portfolio_returns['Cumulative_Return'] = (1 + portfolio_returns['Portfolio_Return']).cumprod() - 1
-    
-    return portfolio_returns
-
-# Construct portfolio using the model-based strategy
-portfolio_results = construct_portfolio(test_data, model, features)
-
-# Display the results
-print(portfolio_results.tail())
 

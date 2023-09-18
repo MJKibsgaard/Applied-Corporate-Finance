@@ -2,7 +2,6 @@
 import yfinance as yf
 from tqdm import tqdm
 
-
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
     Fetch daily stock data along with PE ratio and market cap for given tickers from Yahoo Finance.
@@ -38,13 +37,14 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 
 # Pick the data we want to use
 tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
-"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL", "XRAY", "DVN", "DXCM", "FANG", "DLR", "DFS", "DIS", "DG", "DLTR", "D", "DPZ", "DOV", "DOW", "DTE", "DUK", "DD", "DXC", "EMN", "ETN", "EBAY", "ECL", "EIX", "EW", "EA", "ELV", "LLY", "EMR", "ENPH", "ETR", "EOG", "EPAM", "EQT", "EFX",] 
+"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL"]
 start_date = '2015-01-01'
 end_date = '2020-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
 
 # Print the data for one of the stocks to check
 print(stock_data['META'].tail())
+
 
 ### Next, we calculate some technical indicators
 
@@ -184,10 +184,7 @@ print(f"Training MSE for all stocks: {mse}")
 
 
 
-
 # Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
-
-
 
 def backtest_model(test_data, model, features):
     """
@@ -207,6 +204,7 @@ def backtest_model(test_data, model, features):
     # Construct portfolio: invest in stock on days with positive predicted return
     test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0)
     
+    
     # Compute cumulative returns
     test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
     test_data['Cumulative_Actual_Return'] = (1 + test_data['Daily_Return']).cumprod() - 1
@@ -214,7 +212,8 @@ def backtest_model(test_data, model, features):
     return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
                       'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
 
-# Backtest the model on the testing data for all stocks
+
+## Backtest the model on the testing data for all stocks
 backtest_results = {}
 for ticker in test_data.keys():
     if len(test_data[ticker]) == 0:
@@ -225,17 +224,55 @@ for ticker in test_data.keys():
     else:
         print(f"Required features not available for {ticker}. Skipping...")
 
+        
 # Display the results for one of the stocks to check, for example, META
 print(backtest_results['META'])
 
 
-# Assuming you already have the stock_data dictionary populated
-META_BACKTEST = backtest_results['META']
+import matplotlib.pyplot as plt
 
-# Save the data for META to an Excel file
-file_path = "META_BACKTEST.xlsx"
-META_BACKTEST.to_excel(file_path)
+def plot_average_performance(backtest_results):
+    """
+    Plot the average cumulative returns of the model-based strategy vs. holding across all stocks.
 
-print(f"Data saved to {file_path}")
+    Parameters:
+    - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
+    """
+    # Initialize a list to store the 'Cumulative_Strategy_Return' columns for all stocks
+    cumulative_returns = []
+    cumulative_returns_actual = []
+
+    # Extract the 'Cumulative_Strategy_Return' column for each stock and append to the list
+    for _, df in backtest_results.items():
+        cumulative_returns.append(df['Cumulative_Strategy_Return'])
+
+    for _, df in backtest_results.items():
+        cumulative_returns_actual.append(df['Cumulative_Actual_Return'])
+
+    # Assuming you're using pandas, you can use the concat function to concatenate these columns and then compute the mean along the horizontal axis (axis=1) to get the daily average
+    average_strategy_returns = pd.concat(cumulative_returns, axis=1).mean(axis=1)
+    average_actual_returns = pd.concat(cumulative_returns_actual, axis=1).mean(axis=1)
+
+
+    plt.figure(figsize=(14, 7))
+    plt.plot(average_strategy_returns, label='Average Model-Based Strategy', color='blue')
+    plt.plot(average_actual_returns, label='Average Holding', color='orange')
+    plt.title('Average Cumulative Returns Across All Stocks')
+    plt.xlabel('Date')
+    plt.ylabel('Average Cumulative Return')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+# Plot average performance across all stocks
+plot_average_performance(backtest_results)
+
+
+
+
+
+
+
+
 
 
