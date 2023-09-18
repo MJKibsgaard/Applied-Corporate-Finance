@@ -2,6 +2,11 @@
 import yfinance as yf
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import mean_squared_error
+
 
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
@@ -37,8 +42,7 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 
 
 # Pick the data we want to use
-tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
-"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL"]
+tickers = ["META", "MMM", "AOS", "ABT",]
 start_date = '2015-01-01'
 end_date = '2020-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
@@ -156,8 +160,6 @@ for ticker, df in stock_data.items():
 print(f"META - Training data shape: {train_data['META'].shape}")
 print(f"META - Testing data shape: {test_data['META'].shape}")
 
-
-
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 
@@ -174,119 +176,32 @@ target = 'Target'
 X_train = all_train_data[features]
 y_train = all_train_data[target]
 
-# Train a Random Forest model on the dataset
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+# Scale the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
 
-# Predict on the combined training set to check performance
-train_predictions = model.predict(X_train)
+# Define and train the MLP model
+model = MLPRegressor(hidden_layer_sizes=(128, 64, 32), 
+                     activation='relu', 
+                     solver='adam', 
+                     max_iter=500, 
+                     random_state=42)
+model.fit(X_train_scaled, y_train)
+
+# Predict on the training set to check performance
+train_predictions = model.predict(X_train_scaled)
 mse = mean_squared_error(y_train, train_predictions)
-print(f"Training MSE for all stocks: {mse}")
+print(f"Training MSE for all stocks with MLP: {mse}")
 
+# Extract training data for META
+meta_train_data = all_train_data[all_train_data['Ticker'] == 'META']
+X_meta_train = meta_train_data[features]
+X_meta_train_scaled = scaler.transform(X_meta_train)  # Remember to just transform, not fit_transform
 
-def calculate_sharpe_ratio(returns, risk_free_rate=0.0003):
-    """
-    Calculate the Sharpe ratio.
+# Predict on the training set for META
+meta_train_predictions = model.predict(X_meta_train_scaled)
 
-    Parameters:
-    - returns (Series): Daily returns.
-    - risk_free_rate (float, optional): Daily risk-free rate. Default is 0.0003.
-
-    Returns:
-    - sharpe_ratio (float): Sharpe ratio of the given returns.
-    """
-    avg_daily_return = returns.mean()
-    std_dev_return = returns.std()
-    sharpe_ratio = (avg_daily_return - risk_free_rate) / std_dev_return
-    return sharpe_ratio
-
-
-
-# Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
-
-def backtest_top_stocks_modified(test_data_dict, model, features):
-    """
-    Backtest the trained model on the testing data, investing only in top 10 stocks with highest predicted returns.
-
-    Parameters:
-    - test_data_dict (dict): Dictionary with tickers as keys and corresponding testing data as values.
-    - model (Regressor): Trained regression model.
-    - features (list): List of feature columns to use in prediction.
-
-    Returns:
-    - results_dict (dict): Dictionary with tickers as keys and corresponding results DataFrame as values.
-    """
-    
-    # Create a DataFrame to store daily returns for all stocks
-    all_daily_returns = pd.DataFrame(index=test_data_dict[list(test_data_dict.keys())[0]].index)
-    all_predicted_returns = pd.DataFrame(index=test_data_dict[list(test_data_dict.keys())[0]].index)
-    
-    # Predict returns for all stocks
-    for ticker, data in test_data_dict.items():
-        # Check if data[features] is empty
-        if data[features].empty:
-            print(f"Data for {ticker} is empty. Skipping...")
-            continue
-        
-        data['Predicted_Return'] = model.predict(data[features])
-        all_daily_returns[ticker] = data['Daily_Return']
-        all_predicted_returns[ticker] = data['Predicted_Return']
-
-    # Determine top 10 stocks for each day
-    top_10_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= 10
-
-    # Calculate daily strategy return based on top 10 stocks
-    daily_strategy_return = (all_daily_returns * top_10_stocks).sum(axis=1) / top_10_stocks.sum(axis=1)
-
-    # Compute cumulative returns
-    cumulative_strategy_return = (1 + daily_strategy_return).cumprod() - 1
-    cumulative_actual_return = (1 + all_daily_returns.mean(axis=1)).cumprod() - 1
-
-    results = pd.DataFrame({
-        'Daily_Return': all_daily_returns.mean(axis=1),
-        'Strategy_Return': daily_strategy_return,
-        'Cumulative_Strategy_Return': cumulative_strategy_return,
-        'Cumulative_Actual_Return': cumulative_actual_return
-    })
-    
-    # Compute Sharpe ratios
-    results['Strategy_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Strategy_Return'])
-    results['Actual_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Daily_Return'])
-
-    return results
-
-
-results = backtest_top_stocks_modified(test_data, model, features)
-results.head()
-
-
-import matplotlib.pyplot as plt
-
-def plot_strategy_vs_holding(results_df):
-    """
-    Plot the cumulative return of the model-based strategy vs. holding even amount of stocks.
-
-    Parameters:
-    - results_df (DataFrame): DataFrame containing 'Cumulative_Strategy_Return' and 'Cumulative_Actual_Return' columns.
-    """
-    
-    plt.figure(figsize=(14, 7))
-    
-    # Plot the cumulative returns
-    plt.plot(results_df['Cumulative_Strategy_Return'], label='Top 10 Stocks Strategy', color='blue')
-    plt.plot(results_df['Cumulative_Actual_Return'], label='Even Holding of All Stocks', color='orange')
-    
-    plt.title('Cumulative Return: Top 10 Stocks Strategy vs Even Holding of All Stocks')
-    plt.xlabel('Date')
-    plt.ylabel('Cumulative Return')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    
-    plt.show()
-    
-    # Print Sharpe Ratios
-    print(f"Strategy Sharpe Ratio: {results['Strategy_Sharpe_Ratio'].iloc[0]:.4f}")
-    print(f"Actual Sharpe Ratio: {results['Actual_Sharpe_Ratio'].iloc[0]:.4f}")
-
-plot_strategy_vs_holding(results)
+# Print the predictions for each day
+print("Predictions for META on training data:")
+for date, pred in zip(meta_train_data.index, meta_train_predictions):
+    print(f"Date: {date}, Predicted Return: {pred}")
