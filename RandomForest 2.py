@@ -252,6 +252,21 @@ def plot_average_performance(backtest_results):
 plot_average_performance(backtest_results)
 
 
+# We remove the tickers that has 0 rows. These cannot be used for the portfolio construction
+to_remove = []
+
+for ticker, data in test_data.items():
+    if data.shape[0] == 0:
+        print(f"Ticker {ticker} has 0 rows.")
+        to_remove.append(ticker)
+
+for ticker in to_remove:
+    del test_data[ticker]
+
+
+
+
+
 # Constructing the portfolio
 AmountOfTopPerformersPicked = 3 #This picks the 5 assets with biggest probability of getting positive return
 

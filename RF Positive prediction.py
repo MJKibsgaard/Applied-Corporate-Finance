@@ -1,7 +1,6 @@
 ### Extracting data from yahoo finance. It should be easily scalable. We can just add tickers to expand the model
 import yfinance as yf
 from tqdm import tqdm
-import numpy as np
 
 def fetch_data_with_fundamentals(tickers, start_date, end_date):
     """
@@ -37,8 +36,7 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 
 
 # Pick the data we want to use
-tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
-"CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL"]
+tickers = ["META"]
 start_date = '2015-01-01'
 end_date = '2020-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
@@ -185,6 +183,8 @@ print(f"Training MSE for all stocks: {mse}")
 
 
 
+# Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
+
 def backtest_model(test_data, model, features):
     """
     Backtest the trained model on the testing data.
@@ -200,22 +200,16 @@ def backtest_model(test_data, model, features):
     # Predict returns
     test_data['Predicted_Return'] = model.predict(test_data[features])
     
-    # Initialize the Top10_Strategy_Return column with NaNs
-    test_data['Top10_Strategy_Return'] = np.nan
+    # Construct portfolio: invest in stock on days with positive predicted return
+    test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0)
     
-    # For each day, pick the top 10 stocks and set the average return of these stocks as the strategy return for that day
-    for date, group in test_data.groupby('Date'):
-        top_10 = group.sort_values(by='Predicted_Return', ascending=False).head(10)
-        avg_return = top_10['Daily_Return'].mean()
-        test_data.loc[test_data['Date'] == date, 'Top10_Strategy_Return'] = avg_return
-
+    
     # Compute cumulative returns
-    test_data['Cumulative_Top10_Strategy_Return'] = (1 + test_data['Top10_Strategy_Return']).cumprod() - 1
+    test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
     test_data['Cumulative_Actual_Return'] = (1 + test_data['Daily_Return']).cumprod() - 1
     
-    return test_data[['Date', 'Daily_Return', 'Predicted_Return', 'Top10_Strategy_Return', 
-                      'Cumulative_Top10_Strategy_Return', 'Cumulative_Actual_Return']]
-
+    return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
+                      'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
 
 
 ## Backtest the model on the testing data for all stocks
@@ -229,8 +223,9 @@ for ticker in test_data.keys():
     else:
         print(f"Required features not available for {ticker}. Skipping...")
 
-
-
+        
+# Display the results for one of the stocks to check, for example, META
+print(backtest_results['META'])
 
 
 import matplotlib.pyplot as plt
@@ -270,5 +265,13 @@ def plot_average_performance(backtest_results):
 
 # Plot average performance across all stocks
 plot_average_performance(backtest_results)
+
+
+
+
+
+
+
+
 
 

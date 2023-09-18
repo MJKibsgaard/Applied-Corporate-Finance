@@ -173,7 +173,7 @@ target = 'Target'
 X_train = all_train_data[features]
 y_train = all_train_data[target]
 
-# Train a Random Forest model on the combined data of all 5 stocks
+# Train a Random Forest model on the dataset
 model = RandomForestRegressor(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
@@ -186,93 +186,86 @@ print(f"Training MSE for all stocks: {mse}")
 
 # Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
 
-def backtest_model(test_data, model, features):
+def backtest_top_stocks_modified(test_data_dict, model, features):
     """
-    Backtest the trained model on the testing data.
+    Backtest the trained model on the testing data, investing only in top 10 stocks with highest predicted returns.
 
     Parameters:
-    - test_data (DataFrame): Testing data.
+    - test_data_dict (dict): Dictionary with tickers as keys and corresponding testing data as values.
     - model (Regressor): Trained regression model.
     - features (list): List of feature columns to use in prediction.
 
     Returns:
-    - results (DataFrame): DataFrame with actual and predicted returns, and the strategy's performance.
+    - results_dict (dict): Dictionary with tickers as keys and corresponding results DataFrame as values.
     """
-    # Predict returns
-    test_data['Predicted_Return'] = model.predict(test_data[features])
     
-    # Construct portfolio: invest in stock on days with positive predicted return
-    test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0)
+    # Create a DataFrame to store daily returns for all stocks
+    all_daily_returns = pd.DataFrame(index=test_data_dict[list(test_data_dict.keys())[0]].index)
+    all_predicted_returns = pd.DataFrame(index=test_data_dict[list(test_data_dict.keys())[0]].index)
     
-    
-    # Compute cumulative returns
-    test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
-    test_data['Cumulative_Actual_Return'] = (1 + test_data['Daily_Return']).cumprod() - 1
-    
-    return test_data[['Daily_Return', 'Predicted_Return', 'Strategy_Return', 
-                      'Cumulative_Strategy_Return', 'Cumulative_Actual_Return']]
-
-
-## Backtest the model on the testing data for all stocks
-backtest_results = {}
-for ticker in test_data.keys():
-    if len(test_data[ticker]) == 0:
-        print(f"No test data available for {ticker}. Skipping...")
-        continue
-    if set(features).issubset(test_data[ticker].columns):
-        backtest_results[ticker] = backtest_model(test_data[ticker], model, features)
-    else:
-        print(f"Required features not available for {ticker}. Skipping...")
-
+    # Predict returns for all stocks
+    for ticker, data in test_data_dict.items():
+        # Check if data[features] is empty
+        if data[features].empty:
+            print(f"Data for {ticker} is empty. Skipping...")
+            continue
         
-# Display the results for one of the stocks to check, for example, META
-print(backtest_results['META'])
+        data['Predicted_Return'] = model.predict(data[features])
+        all_daily_returns[ticker] = data['Daily_Return']
+        all_predicted_returns[ticker] = data['Predicted_Return']
+
+    # Determine top 10 stocks for each day
+    top_10_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= 25
+
+    # Calculate daily strategy return based on top 10 stocks
+    daily_strategy_return = (all_daily_returns * top_10_stocks).sum(axis=1) / top_10_stocks.sum(axis=1)
+
+    # Compute cumulative returns
+    cumulative_strategy_return = (1 + daily_strategy_return).cumprod() - 1
+    cumulative_actual_return = (1 + all_daily_returns.mean(axis=1)).cumprod() - 1
+
+    results = pd.DataFrame({
+        'Daily_Return': all_daily_returns.mean(axis=1),
+        'Strategy_Return': daily_strategy_return,
+        'Cumulative_Strategy_Return': cumulative_strategy_return,
+        'Cumulative_Actual_Return': cumulative_actual_return
+    })
+    
+    return results
+
+# The provided code for backtesting won't run here since we don't have 'test_data', 'model', or 'features' defined in this session.
+# However, you can integrate the modified function into your code and execute it in your local environment.
+
+results = backtest_top_stocks_modified(test_data, model, features)
+results.head()
 
 
 import matplotlib.pyplot as plt
 
-def plot_average_performance(backtest_results):
+def plot_strategy_vs_holding(results_df):
     """
-    Plot the average cumulative returns of the model-based strategy vs. holding across all stocks.
+    Plot the cumulative return of the model-based strategy vs. holding even amount of stocks.
 
     Parameters:
-    - backtest_results (dict): Dictionary with tickers as keys and backtesting results as values.
+    - results_df (DataFrame): DataFrame containing 'Cumulative_Strategy_Return' and 'Cumulative_Actual_Return' columns.
     """
-    # Initialize a list to store the 'Cumulative_Strategy_Return' columns for all stocks
-    cumulative_returns = []
-    cumulative_returns_actual = []
-
-    # Extract the 'Cumulative_Strategy_Return' column for each stock and append to the list
-    for _, df in backtest_results.items():
-        cumulative_returns.append(df['Cumulative_Strategy_Return'])
-
-    for _, df in backtest_results.items():
-        cumulative_returns_actual.append(df['Cumulative_Actual_Return'])
-
-    # Assuming you're using pandas, you can use the concat function to concatenate these columns and then compute the mean along the horizontal axis (axis=1) to get the daily average
-    average_strategy_returns = pd.concat(cumulative_returns, axis=1).mean(axis=1)
-    average_actual_returns = pd.concat(cumulative_returns_actual, axis=1).mean(axis=1)
-
-
+    
     plt.figure(figsize=(14, 7))
-    plt.plot(average_strategy_returns, label='Average Model-Based Strategy', color='blue')
-    plt.plot(average_actual_returns, label='Average Holding', color='orange')
-    plt.title('Average Cumulative Returns Across All Stocks')
+    
+    # Plot the cumulative returns
+    plt.plot(results_df['Cumulative_Strategy_Return'], label='Top 10 Stocks Strategy', color='blue')
+    plt.plot(results_df['Cumulative_Actual_Return'], label='Even Holding of All Stocks', color='orange')
+    
+    plt.title('Cumulative Return: Top 10 Stocks Strategy vs Even Holding of All Stocks')
     plt.xlabel('Date')
-    plt.ylabel('Average Cumulative Return')
+    plt.ylabel('Cumulative Return')
     plt.legend()
     plt.grid(True)
+    plt.tight_layout()
+    
     plt.show()
 
-# Plot average performance across all stocks
-plot_average_performance(backtest_results)
 
-
-
-
-
-
-
-
+plot_strategy_vs_holding(results)
 
 
