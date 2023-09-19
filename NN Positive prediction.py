@@ -41,9 +41,6 @@ for ticker, df in stock_data.items():
     train_data[ticker] = train
     test_data[ticker] = test
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
-
 # Create the target column for each stock and concatenate to form a combined dataset
 all_train_data = pd.concat([df.assign(Ticker=ticker) for ticker, df in train_data.items()])
 all_train_data['Target'] = all_train_data.groupby('Ticker')['Daily_Return'].shift(-1)
@@ -73,4 +70,5 @@ model.fit(X_train_scaled, y_train)
 train_predictions = model.predict(X_train_scaled)
 mse = mean_squared_error(y_train, train_predictions)
 print(f"Training MSE for all stocks with MLP: {mse}")
+
 
