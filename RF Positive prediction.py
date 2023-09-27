@@ -80,9 +80,10 @@ def backtest_model(test_data, model, features):
     # Predict returns
     test_data['Predicted_Return'] = model.predict(test_data[features])
     
-    # Construct portfolio: invest in stock on days with positive predicted return
-    test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0)
-    
+    # Construct portfolio: invest in stock on days with positive predicted return and short on days when negative
+    test_data['Strategy_Return'] = test_data['Daily_Return'] * (test_data['Predicted_Return'] > 0) - test_data['Daily_Return'] * (test_data['Predicted_Return'] < 0)
+
+
     
     # Compute cumulative returns
     test_data['Cumulative_Strategy_Return'] = (1 + test_data['Strategy_Return']).cumprod() - 1
