@@ -39,8 +39,8 @@ def fetch_data_with_fundamentals(tickers, start_date, end_date):
 # Pick the data we want to use
 tickers = ["META", "MMM", "AOS", "ABT", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME", "AMGN", "APH", "ADI", "ANSS", "AON", "APA", "AAPL", "AMAT", "APTV", "ACGL", "ANET", "AJG", "AIZ", "T", "ATO", "ADSK", "AZO", "AVB", "AVY", "AXON", "BKR", "BALL", "BAC", "BBWI", "BAX", "BDX", "WRB", "BRK.B", "ZTS","CTSH", "CL", "CMCSA", "CMA", "CAG", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW", "CTVA", 
 "CSGP", "COST", "CTRA", "CCI", "CSX", "CMI", "CVS", "DHI", "DHR", "DRI", "DVA", "DE", "DAL"]
-start_date = '2015-01-01'
-end_date = '2020-01-01'
+start_date = '2018-01-01'
+end_date = '2023-01-01'
 stock_data = fetch_data_with_fundamentals(tickers, start_date, end_date)
 
 # Print the data for one of the stocks to check
@@ -110,19 +110,54 @@ def compute_lagged_returns(data, lag_days=5):
 for ticker, df in stock_data.items():
     stock_data[ticker] = compute_lagged_returns(df)
 
-# Print the data for one of the stocks to check
-print(stock_data['META'].tail(10))
+
+def compute_bollinger_bands(data):
+    """
+    Compute Bollinger Bands for stock data.
+    
+    Parameters:
+    - data (DataFrame): Stock data with `Close` column.
+    
+    Returns:
+    - DataFrame with added Bollinger Bands columns.
+    """
+    # Calculate rolling mean and standard deviation
+    rolling_mean = data['Close'].rolling(window=20).mean()
+    rolling_std = data['Close'].rolling(window=20).std()
+    
+    # Calculate Bollinger Bands
+    data['Upper_Bollinger_Band'] = rolling_mean + (rolling_std * 2)
+    data['Lower_Bollinger_Band'] = rolling_mean - (rolling_std * 2)
+    
+    return data
+
+def compute_macd(data):
+    """
+    Compute MACD and Signal line for stock data.
+    
+    Parameters:
+    - data (DataFrame): Stock data with `Close` column.
+    
+    Returns:
+    - DataFrame with added MACD and Signal line columns.
+    """
+    # Calculate 12-day EMA and 26-day EMA
+    data['12_day_EMA'] = data['Close'].ewm(span=12, adjust=False).mean()
+    data['26_day_EMA'] = data['Close'].ewm(span=26, adjust=False).mean()
+    
+    # Calculate MACD
+    data['MACD'] = data['12_day_EMA'] - data['26_day_EMA']
+    
+    # Calculate Signal line
+    data['Signal_Line'] = data['MACD'].ewm(span=9, adjust=False).mean()
+    
+    return data
 
 
-# Assuming you already have the stock_data dictionary populated
-meta_data = stock_data['META']
-
-# Save the data for META to an Excel file
-file_path = "META_stock_data.xlsx"
-meta_data.to_excel(file_path)
-
-print(f"Data saved to {file_path}")
-
+for ticker, df in stock_data.items():
+    df = compute_bollinger_bands(df)
+    df = compute_macd(df)
+    stock_data[ticker] = df
 
 
 
@@ -160,6 +195,9 @@ print(f"META - Testing data shape: {test_data['META'].shape}")
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+
 
 # Create the target column for each stock and concatenate to form a combined dataset
 all_train_data = pd.concat([df.assign(Ticker=ticker) for ticker, df in train_data.items()])
@@ -167,16 +205,45 @@ all_train_data['Target'] = all_train_data.groupby('Ticker')['Daily_Return'].shif
 all_train_data.dropna(inplace=True)  # Drop rows with NaN targets
 
 # Define features and target
-features = ['MA20', 'RSI', 'PE_Ratio', 'Market_Cap'] + [f'Lagged_Return_{i}' for i in range(1, 6)]
+features = ['MA20', 'RSI', 'PE_Ratio', 'Market_Cap', 
+            'Upper_Bollinger_Band', 'Lower_Bollinger_Band', 
+            'MACD', 'Signal_Line'] + [f'Lagged_Return_{i}' for i in range(1, 6)]
+
 target = 'Target'
 
 # Split combined dataset into X (features) and y (target)
 X_train = all_train_data[features]
 y_train = all_train_data[target]
 
-# Train a Random Forest model on the dataset
-model = RandomForestRegressor(n_estimators=100, random_state=42)
+# Train a Random Forest model on the dataset. We use the gridsearch to tune the hyperparameters
+# Define the hyperparameters and their possible values
+param_grid = {
+    'n_estimators': [10, 50, 100, 200],
+    'max_depth': [None, 10, 20, 30, 40],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['auto', 'sqrt']
+}
+
+# Initialize the Random Forest model
+rf = RandomForestRegressor()
+
+
+# Use RandomizedSearchCV with 50 iterations
+random_search = RandomizedSearchCV(estimator=rf, param_distributions=param_grid, 
+                                   n_iter=10, cv=3, n_jobs=-1, verbose=2, scoring='neg_mean_squared_error')
+
+# Fit the model to the training data
+random_search.fit(X_train, y_train)
+
+# Get the best hyperparameters
+best_params = random_search.best_params_
+print("Best Hyperparameters:", best_params)
+
+# Train the Random Forest model with the best hyperparameters on the full training set
+model = RandomForestRegressor(**best_params)
 model.fit(X_train, y_train)
+
 
 # Predict on the combined training set to check performance
 train_predictions = model.predict(X_train)
@@ -250,22 +317,18 @@ print(f"Incorrect Predictions: {incorrect}")
 
 
 
+# Modified backtest function to implement long-short strategy
 
-
-
-
-
-
-# Now we actually test the model on our validation data. We test if the stock picking actually provides value to the investment
-
-def backtest_top_stocks_modified(test_data_dict, model, features):
+def backtest_long_short_strategy(test_data_dict, model, features, n=20):
     """
-    Backtest the trained model on the testing data, investing only in top 10 stocks with highest predicted returns.
+    Backtest the trained model on the testing data, going long on top 'n' stocks with highest predicted returns
+    and short on bottom 'n' stocks with lowest predicted returns.
 
     Parameters:
     - test_data_dict (dict): Dictionary with tickers as keys and corresponding testing data as values.
     - model (Regressor): Trained regression model.
     - features (list): List of feature columns to use in prediction.
+    - n (int): Number of stocks to long and short each day.
 
     Returns:
     - results_dict (dict): Dictionary with tickers as keys and corresponding results DataFrame as values.
@@ -286,11 +349,14 @@ def backtest_top_stocks_modified(test_data_dict, model, features):
         all_daily_returns[ticker] = data['Daily_Return']
         all_predicted_returns[ticker] = data['Predicted_Return']
 
-    # Determine top 10 stocks for each day
-    top_10_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= 10
+    # Determine top 'n' stocks to long and bottom 'n' stocks to short each day
+    long_stocks = all_predicted_returns.rank(axis=1, ascending=False) <= n
+    short_stocks = all_predicted_returns.rank(axis=1, ascending=True) <= n
 
-    # Calculate daily strategy return based on top 10 stocks
-    daily_strategy_return = (all_daily_returns * top_10_stocks).sum(axis=1) / top_10_stocks.sum(axis=1)
+    # Calculate daily strategy return 
+    daily_long_return = (all_daily_returns * long_stocks).sum(axis=1) / long_stocks.sum(axis=1)
+    daily_short_return = (all_daily_returns * short_stocks).sum(axis=1) / short_stocks.sum(axis=1)
+    daily_strategy_return = daily_long_return - daily_short_return
 
     # Compute cumulative returns
     cumulative_strategy_return = (1 + daily_strategy_return).cumprod() - 1
@@ -303,14 +369,17 @@ def backtest_top_stocks_modified(test_data_dict, model, features):
         'Cumulative_Actual_Return': cumulative_actual_return
     })
     
-    # Compute Sharpe ratios
+    # Assuming the calculate_sharpe_ratio function is defined elsewhere in your code
     results['Strategy_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Strategy_Return'])
     results['Actual_Sharpe_Ratio'] = calculate_sharpe_ratio(results['Daily_Return'])
 
     return results
 
+# Displaying the modified function
+print(backtest_long_short_strategy)
 
-results = backtest_top_stocks_modified(test_data, model, features)
+
+results = backtest_long_short_strategy(test_data, model, features)
 results.head()
 
 
@@ -344,5 +413,11 @@ def plot_strategy_vs_holding(results_df):
     print(f"Actual Sharpe Ratio: {results['Actual_Sharpe_Ratio'].iloc[0]:.4f}")
 
 plot_strategy_vs_holding(results)
+
+
+
+
+
+
 
 
