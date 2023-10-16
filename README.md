@@ -5,7 +5,9 @@ pip install yfinance \
 pip install pandas
 
 
-## The following stock tickers has been removed from the file due to insufficient data
+
+# Note to self
+Når du bruger random forest skal du bruge den normale anconda, der er anbefalet. Når du bruger tensorflow skal du bruge et andet environment.
  
 
 
