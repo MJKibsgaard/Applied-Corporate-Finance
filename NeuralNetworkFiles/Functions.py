@@ -58,8 +58,8 @@ def lagged_return(data, days=1):
 
 #Function 6 - Bollinger bands
 def bollinger_bands(data, window=20, num_std=2):
-    rolling_mean = data['Close'].rolling(window=window).mean().shift(-3)
-    rolling_std = data['Close'].rolling(window=window).std().shift(-3)
+    rolling_mean = data['Close'].rolling(window=window).mean().shift(-2)
+    rolling_std = data['Close'].rolling(window=window).std().shift(-2)
     
     upper_band = rolling_mean + (rolling_std * num_std)
     lower_band = rolling_mean - (rolling_std * num_std)
